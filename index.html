@@ -1,176 +1,314 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Corazón Compacto HD Dinámico</title>
-  <style>
-    html, body {
-      margin: 0; padding: 0;
-      background: #000; height: 100vh;
-      display: flex; justify-content: center; align-items: center;
-    }
-    #container {
-      width: 300px; height: 400px; position: relative;
-    }
-    #background {
-      position: absolute; width: 100%; height: 100%;
-      background: radial-gradient(circle at center, #000010 0%, #000018 40%, #00001f 100%);
-      animation: skywave 10s ease-in-out infinite alternate;
-      z-index: -1;
-    }
-    @keyframes skywave {
-      0% { background-size: 100% 100%; }
-      100% { background-size: 110% 110%; }
-    }
-    canvas {
-      position: absolute; top: 0; left: 0;
-      width: 100%; height: 100%;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#06020a">
+<title>Corazón de estrellas</title>
+<style>
+  :root{ --rose:#ff4d85; --soft:#ffd3e2; }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#06020a;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  .veil{position:fixed;inset:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse at 50% 42%,rgba(255,60,120,.10),transparent 55%),
+      radial-gradient(ellipse at 50% 120%,rgba(90,30,140,.35),transparent 60%),
+      radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(0,0,0,.65) 100%)}
+  .text{position:fixed;left:0;right:0;bottom:max(6vh,34px);text-align:center;padding:0 22px;pointer-events:none;
+    opacity:0;transform:translateY(14px);animation:rise 2.4s .8s cubic-bezier(.2,.7,.2,1) forwards}
+  .text h1{font:600 clamp(24px,5.4vw,46px)/1.15 'Segoe Script','Brush Script MT','Snell Roundhand',cursive;
+    color:var(--soft);letter-spacing:.01em;text-shadow:0 0 22px rgba(255,77,133,.75),0 0 60px rgba(255,77,133,.35)}
+  .text p{margin-top:10px;font-size:clamp(11px,2.6vw,14px);letter-spacing:.22em;text-transform:uppercase;color:rgba(255,211,226,.55)}
+  .hint{position:fixed;top:max(3vh,18px);left:0;right:0;text-align:center;font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:rgba(255,211,226,.4);pointer-events:none;opacity:0;animation:rise 2s 2.4s ease forwards,fade 1s 9s ease forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  @keyframes fade{to{opacity:0}}
+  @media (prefers-reduced-motion:reduce){.text,.hint{animation:none;opacity:1;transform:none}}
+</style>
 </head>
 <body>
-  <div id="container">
-    <div id="background"></div>
-    <canvas id="canvas"></canvas>
-  </div>
-  <script>
-    const container = document.getElementById('container');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    let w, h, dpr;
-    const mouse = { x: 0, y: 0, radius: 80 };
+<canvas id="c"></canvas>
+<div class="veil"></div>
+<div class="text"><h1 id="msg"></h1><p id="who"></p></div>
+<div class="hint">Toca o mueve el dedo sobre el corazón</div>
 
-    function resize() {
-      dpr = window.devicePixelRatio || 1;
-      w = container.clientWidth;
-      h = container.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = w + 'px';
-      canvas.style.height = h + 'px';
-      ctx.scale(dpr, dpr);
-    }
-    window.addEventListener('resize', resize);
-    resize();
+<script>
+/* =========================================================
+   PERSONALIZA AQUÍ (o por link: corazon.html?msg=Te amo&para=María)
+   ========================================================= */
+const CONFIG = {
+  mensaje: 'Eres lo más lindo que tengo',
+  para: ''                        // nombre opcional, se muestra debajo
+};
 
-    // Corazón shape
-    function heartShape(t, scale=10) {
-      const x = scale*16*Math.pow(Math.sin(t),3);
-      const y = -scale*(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
-      return [x,y];
-    }
-    function randomColor() {
-      const cols = ['#ff4d4d','#ff6699','#ff0066','#ff85b3','#ff5e78','#ff3366'];
-      return cols[Math.floor(Math.random()*cols.length)];
-    }
+const q = new URLSearchParams(location.search);
+document.getElementById('msg').textContent = q.get('msg') || CONFIG.mensaje;
+document.getElementById('who').textContent = q.get('para') ? 'Para ' + q.get('para') : (CONFIG.para ? 'Para ' + CONFIG.para : '');
 
-    // Microbots
-    const bots = [];
-    const numBots = 4000;
-    for(let i=0;i<numBots;i++){
-      const t = Math.random()*Math.PI*2;
-      const [hx, hy] = heartShape(t);
-      const d = Math.pow(Math.random(),0.7);
-      const x0 = w/2 + hx*d;
-      const y0 = h/2 + hy*d;
-      bots.push({ x: x0, y: y0, baseX: x0, baseY: y0, vx: 0, vy: 0, color: randomColor() });
-    }
+/* ---------- base ---------- */
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const reduce = matchMedia('(prefers-reduced-motion:reduce)').matches;
+let W, H, DPR, S, CX, CY, mobile;
+const mouse = { x:-999, y:-999, px:-999, py:-999, active:false, r:90 };
 
-    // Starfield
-    const stars = [];
-    for(let i=0;i<100;i++){
-      stars.push({ x: Math.random()*w, y: Math.random()*h, r: Math.random()*1.2, speed: 0.2+Math.random()*0.3 });
-    }
-    function drawStars(){
-      ctx.save(); ctx.globalAlpha=0.3;
-      stars.forEach(s=>{
-        ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
-        ctx.fillStyle='#fff'; ctx.fill();
-        s.y += s.speed;
-        if(s.y>h){ s.y=0; s.x=Math.random()*w; }
-      });
-      ctx.restore();
-    }
+function resize(){
+  DPR = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  mobile = W < 700;
+  S  = Math.min(W*0.82/34, H*0.50/30);   /* escala del corazón */
+  CX = W/2;
+  CY = H*0.45 - 2.5*S;
+  mouse.r = Math.max(70, S*5);
+  buildStars();
+}
 
-    // Meteoritos
-    let meteoros = [];
-    function createMeteor() {
-      const edge = Math.floor(Math.random()*4);
-      let x=0,y=0;
-      if(edge===0){ x=-20; y=Math.random()*h; }
-      if(edge===1){ x=Math.random()*w; y=-20; }
-      if(edge===2){ x=w+20; y=Math.random()*h; }
-      if(edge===3){ x=Math.random()*w; y=h+20; }
-      const dx = w/2 - x, dy = h/2 - y;
-      const dist = Math.hypot(dx,dy);
-      const speed = 6;
-      meteoros.push({x, y, vx: dx/dist*speed, vy: dy/dist*speed, trail: []});
-    }
-    setInterval(createMeteor, 2000);
+/* ---------- forma de corazón ---------- */
+function heart(t){
+  return [
+    16*Math.pow(Math.sin(t),3),
+    -(13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t))
+  ];
+}
 
-    function drawMeteoros(){
-      meteoros.forEach(m=>{
-        m.trail.unshift({x:m.x,y:m.y});
-        if(m.trail.length>20) m.trail.pop();
-        m.trail.forEach((p,i)=>{
-          ctx.beginPath(); ctx.arc(p.x,p.y,1.5,0,Math.PI*2);
-          ctx.fillStyle=`rgba(255,255,255,${1-i/m.trail.length})`; ctx.fill();
-        });
-        ctx.beginPath(); ctx.arc(m.x,m.y,4,0,Math.PI*2);
-        ctx.fillStyle='white'; ctx.shadowColor='white'; ctx.shadowBlur=8; ctx.fill(); ctx.shadowBlur=0;
-        m.x += m.vx; m.y += m.vy;
-      });
-      meteoros = meteoros.filter(m=>m.x>-30 && m.x<w+30 && m.y>-30 && m.y<h+30);
-    }
+/* ---------- partículas ---------- */
+const PALETTE = ['#ff2d6f','#ff4d85','#ff6b9a','#ff85b3','#ffa3c4','#ffc2d8','#ff3d5e','#ff7a9c'];
+const N = (mobile => mobile ? 3200 : 5600)(innerWidth < 700);
+const buckets = PALETTE.map(() => []);
+const parts = [];
+for(let i=0;i<N;i++){
+  const t = Math.random()*Math.PI*2;
+  const [hx,hy] = heart(t);
+  const edge = Math.random() < 0.22;
+  const d = edge ? 0.96 + Math.random()*0.06 : Math.pow(Math.random(), 0.55);
+  const p = {
+    ux: hx*d, uy: hy*d,
+    uz: (Math.random()-.5) * 9 * (1 - d*0.55),
+    ox:0, oy:0, vx:0, vy:0,
+    sz: 0.8 + Math.random()*1.1 + (edge ? .3 : 0),
+    tw: Math.random()*6.28,
+    px:0, py:0
+  };
+  /* color según altura/profundidad para dar volumen */
+  const shade = Math.min(PALETTE.length-1, Math.max(0, Math.floor(((p.uz+5)/10)*4 + Math.random()*3 + (edge?1:0))));
+  buckets[shade].push(p);
+  parts.push(p);
+}
 
-    // Mouse/touch
-    container.addEventListener('mousemove', e=>{
-      const rect = container.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top;
-    });
-    container.addEventListener('touchmove', e=>{
-      if(e.touches[0]){
-        const rect = container.getBoundingClientRect();
-        mouse.x = e.touches[0].clientX - rect.left;
-        mouse.y = e.touches[0].clientY - rect.top;
+/* ---------- estrellas ---------- */
+let stars = [];
+function buildStars(){
+  const n = Math.floor(W*H/9000);
+  stars = Array.from({length:n},()=>({
+    x:Math.random()*W, y:Math.random()*H, z:Math.random()*.9+.1,
+    r:Math.random()*1.3+.2, p:Math.random()*6.28, s:Math.random()*.03+.01
+  }));
+}
+
+/* ---------- meteoros ---------- */
+let meteors = [];
+function spawnMeteor(){
+  const fromLeft = Math.random() < .5;
+  const x = fromLeft ? -30 : W+30;
+  const y = Math.random()*H*.5;
+  const speed = 7 + Math.random()*4;
+  const ang = (fromLeft ? 1 : -1) * (0.25 + Math.random()*.35);
+  meteors.push({ x, y, vx: (fromLeft?1:-1)*Math.cos(ang)*speed, vy: Math.abs(Math.sin(ang))*speed*.8, life:0 });
+}
+
+/* ---------- corazones flotantes ---------- */
+let floaters = [];
+function spawnFloater(x, y, burst){
+  floaters.push({
+    x: x ?? CX + (Math.random()-.5)*S*26,
+    y: y ?? CY + S*15 + Math.random()*S*3,
+    vx: (Math.random()-.5)*(burst?2.2:.4),
+    vy: -(burst ? 1.2+Math.random()*2.4 : .45+Math.random()*.7),
+    s: (burst?5:3) + Math.random()*(burst?9:6),
+    a: .85, rot:(Math.random()-.5)*.6, sw:Math.random()*6.28,
+    c: PALETTE[Math.floor(Math.random()*5)]
+  });
+}
+function heartPath(x,y,s){
+  ctx.beginPath();
+  ctx.moveTo(x, y + s*.35);
+  ctx.bezierCurveTo(x, y - s*.2, x - s, y - s*.2, x - s, y + s*.35);
+  ctx.bezierCurveTo(x - s, y + s*.95, x, y + s*1.2, x, y + s*1.45);
+  ctx.bezierCurveTo(x, y + s*1.2, x + s, y + s*.95, x + s, y + s*.35);
+  ctx.bezierCurveTo(x + s, y - s*.2, x, y - s*.2, x, y + s*.35);
+  ctx.closePath();
+}
+
+/* ---------- entrada ---------- */
+function setPointer(x,y){
+  mouse.px = mouse.x; mouse.py = mouse.y;
+  mouse.x = x; mouse.y = y; mouse.active = true;
+}
+addEventListener('pointermove', e => setPointer(e.clientX, e.clientY), {passive:true});
+addEventListener('pointerleave', () => { mouse.active = false; mouse.x = mouse.y = -999; });
+addEventListener('pointerdown', e => {
+  setPointer(e.clientX, e.clientY);
+  burst(e.clientX, e.clientY);
+});
+addEventListener('pointerup', e => { if(e.pointerType !== 'mouse'){ mouse.active=false; mouse.x=mouse.y=-999; } });
+
+let shock = null;
+function burst(x,y){
+  shock = { x, y, r:0 };
+  for(let i=0;i<7;i++) spawnFloater(x + (Math.random()-.5)*30, y + (Math.random()-.5)*30, true);
+  beatBoost = 1;
+}
+
+/* ---------- animación ---------- */
+let T = 0, beatBoost = 0, last = performance.now(), running = true;
+document.addEventListener('visibilitychange', () => { running = !document.hidden; if(running){ last = performance.now(); loop(last); } });
+addEventListener('resize', resize);
+resize();
+setInterval(() => { if(running && meteors.length < 2) spawnMeteor(); }, 3200);
+setInterval(() => { if(running && floaters.length < 40) spawnFloater(); }, 520);
+
+function loop(now){
+  if(!running) return;
+  const dt = Math.min(2, (now - last)/16.667); last = now;
+  T += dt/60;
+  ctx.clearRect(0,0,W,H);
+
+  const mx = mouse.active ? (mouse.x/W - .5) : 0;
+  const my = mouse.active ? (mouse.y/H - .5) : 0;
+
+  /* estrellas con parallax y parpadeo */
+  ctx.globalCompositeOperation = 'source-over';
+  for(const s of stars){
+    s.p += s.s*dt;
+    const x = ((s.x - mx*28*s.z) % W + W) % W;
+    const y = ((s.y - my*28*s.z) % H + H) % H;
+    const a = .25 + (Math.sin(s.p)*.5+.5)*.6*s.z;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = s.r > 1.1 ? '#ffe6ef' : '#d8d2ff';
+    ctx.beginPath(); ctx.arc(x,y,s.r*s.z+.15,0,6.283); ctx.fill();
+  }
+
+  /* latido en dos tiempos */
+  const b1 = Math.pow(Math.max(0, Math.sin(T*2.4)), 10);
+  const b2 = Math.pow(Math.max(0, Math.sin(T*2.4 - .85)), 10);
+  beatBoost *= Math.pow(.93, dt);
+  const beat = reduce ? 0 : b1*.07 + b2*.045 + beatBoost*.08;
+  const pulse = 1 + beat;
+
+  /* resplandor detrás del corazón */
+  const gr = S*20*(1 + beat*1.6);
+  const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, gr);
+  g.addColorStop(0, `rgba(255,60,120,${.30 + beat*1.4})`);
+  g.addColorStop(.5, 'rgba(200,30,100,.10)');
+  g.addColorStop(1, 'rgba(120,20,90,0)');
+  ctx.globalAlpha = 1; ctx.fillStyle = g;
+  ctx.fillRect(CX-gr, CY-gr, gr*2, gr*2);
+
+  /* rotación 3D suave */
+  const ang = reduce ? 0 : Math.sin(T*.55)*.55;
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+
+  /* meteoros: se mueven y dibujan */
+  ctx.globalCompositeOperation = 'lighter';
+  for(const m of meteors){
+    m.x += m.vx*dt; m.y += m.vy*dt; m.life += dt;
+    const tail = 90;
+    const len = Math.hypot(m.vx,m.vy);
+    const gx = m.x - m.vx/len*tail, gy = m.y - m.vy/len*tail;
+    const lg = ctx.createLinearGradient(m.x,m.y,gx,gy);
+    lg.addColorStop(0,'rgba(255,255,255,.95)'); lg.addColorStop(1,'rgba(255,120,170,0)');
+    ctx.globalAlpha = 1; ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(m.x,m.y); ctx.lineTo(gx,gy); ctx.stroke();
+  }
+  meteors = meteors.filter(m => m.x > -120 && m.x < W+120 && m.y < H+120);
+
+  /* física de partículas */
+  const mr = mouse.r, mr2 = mr*mr;
+  for(const p of parts){
+    const tx = CX + (p.ux*ca + p.uz*sa) * S * pulse;
+    const ty = CY + p.uy * S * pulse;
+    const wob = reduce ? 0 : Math.sin(T*1.6 + p.tw)*.25;   /* respiración individual */
+    let x = tx + p.ox, y = ty + p.oy + wob;
+
+    /* repulsión del dedo/mouse */
+    if(mouse.active){
+      const dx = x-mouse.x, dy = y-mouse.y, d2 = dx*dx+dy*dy;
+      if(d2 < mr2){
+        const d = Math.sqrt(d2)||1, f = (1 - d/mr);
+        p.vx += dx/d*f*2.6; p.vy += dy/d*f*2.6;
       }
-    },{passive:true});
-
-    // Animación
-    function animate(){
-      ctx.clearRect(0,0,w,h);
-      drawStars();
-      drawMeteoros();
-      bots.forEach(bot=>{
-        bot.vx += (bot.baseX-bot.x)*0.02;
-        bot.vy += (bot.baseY-bot.y)*0.02;
-        const dx = bot.x-mouse.x, dy = bot.y-mouse.y;
-        const dist = Math.hypot(dx,dy);
-        if(dist<mouse.radius){
-          const f=(mouse.radius-dist)/mouse.radius;
-          const ang=Math.atan2(dy,dx);
-          bot.vx += Math.cos(ang)*f*2;
-          bot.vy += Math.sin(ang)*f*2;
-        }
-        meteoros.forEach(m=>{
-          const dx2=bot.x-m.x, dy2=bot.y-m.y;
-          const d2=Math.hypot(dx2,dy2);
-          if(d2<80){
-            const f2=(80-d2)/80;
-            const ang2=Math.atan2(dy2,dx2);
-            bot.vx += Math.cos(ang2)*f2*3;
-            bot.vy += Math.sin(ang2)*f2*3;
-          }
-        });
-        bot.vx*=0.9; bot.vy*=0.9;
-        bot.x+=bot.vx; bot.y+=bot.vy;
-        ctx.beginPath(); ctx.arc(bot.x,bot.y,0.6,0,Math.PI*2);
-        ctx.fillStyle=bot.color; ctx.fill();
-      });
-      requestAnimationFrame(animate);
     }
-    animate();
-  </script>
+    /* onda de choque del toque */
+    if(shock){
+      const dx = x-shock.x, dy = y-shock.y, d = Math.hypot(dx,dy)||1;
+      const diff = Math.abs(d - shock.r);
+      if(diff < 38){ const f = (1 - diff/38)*5; p.vx += dx/d*f; p.vy += dy/d*f; }
+    }
+    /* meteoros empujan */
+    for(const m of meteors){
+      const dx = x-m.x, dy = y-m.y, d2 = dx*dx+dy*dy;
+      if(d2 < 3600){ const d = Math.sqrt(d2)||1, f = (1-d/60)*2.2; p.vx += dx/d*f; p.vy += dy/d*f; }
+    }
+    /* resorte hacia su sitio */
+    p.vx += -p.ox*.045*dt; p.vy += -p.oy*.045*dt;
+    p.vx *= Math.pow(.86, dt); p.vy *= Math.pow(.86, dt);
+    p.ox += p.vx*dt; p.oy += p.vy*dt;
+
+    p.px = tx + p.ox; p.py = ty + p.oy + wob;
+  }
+  if(shock){ shock.r += 9*dt; if(shock.r > Math.max(W,H)) shock = null; }
+
+  /* dibujo por color (rápido) con brillo aditivo */
+  ctx.globalAlpha = .9;
+  for(let i=0;i<buckets.length;i++){
+    ctx.fillStyle = PALETTE[i];
+    ctx.beginPath();
+    for(const p of buckets[i]){
+      const sz = p.sz * (1 + beat*.9);
+      ctx.rect(p.px - sz/2, p.py - sz/2, sz, sz);
+    }
+    ctx.fill();
+  }
+
+  /* destellos sobre algunas partículas */
+  ctx.globalAlpha = 1; ctx.fillStyle = '#fff';
+  for(let i=0;i<parts.length;i+=23){
+    const p = parts[i];
+    const tw = Math.sin(T*3 + p.tw*3);
+    if(tw > .93){ const r = 1.2 + (tw-.93)*22; ctx.globalAlpha = (tw-.93)*12; ctx.beginPath(); ctx.arc(p.px,p.py,r,0,6.283); ctx.fill(); }
+  }
+
+  /* corazones flotantes */
+  ctx.globalCompositeOperation = 'source-over';
+  for(const f of floaters){
+    f.sw += .03*dt;
+    f.x += (f.vx + Math.sin(f.sw)*.35)*dt; f.y += f.vy*dt;
+    f.vx *= Math.pow(.985, dt); f.a -= .0035*dt;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, f.a);
+    ctx.translate(f.x, f.y); ctx.rotate(f.rot + Math.sin(f.sw)*.2);
+    ctx.shadowColor = f.c; ctx.shadowBlur = 14;
+    ctx.fillStyle = f.c;
+    heartPath(0, -f.s*.7, f.s*.5);
+    ctx.fill();
+    ctx.restore();
+  }
+  floaters = floaters.filter(f => f.a > 0 && f.y > -40);
+
+  /* onda visible del toque */
+  if(shock){
+    ctx.globalAlpha = Math.max(0, .35 - shock.r/Math.max(W,H)*.35);
+    ctx.strokeStyle = '#ff9ab8'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(shock.x, shock.y, shock.r, 0, 6.283); ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
 </body>
 </html>
